@@ -9,7 +9,7 @@ from time import sleep
 from numpy import ndarray, array, concatenate, delete
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('andes.addon')
 
 
 class Streaming(object):
@@ -394,7 +394,12 @@ class Streaming(object):
                 assert len(p) == len(ret[0])
                 ret.append(p)
             else:
-                ret.append(list(self.system.__dict__[model].__dict__[p]))
+                # fix for parameters that are lists
+                value = list(self.system.__dict__[model].__dict__[p])
+                if isinstance(value[0], list):
+                    logger.debug('List parameter value received. Using the 0-th value')
+                    value = [x[0] for x in value]
+                ret.append(list(value))
 
         return ret
 
@@ -526,9 +531,11 @@ class Streaming(object):
                 time = times[i]
                 duration = durations[i]
             except IndexError:
-                logger.Warning(
+                logger.warning(
                     'Event key values might have different lengths.')
                 continue
+            except TypeError:
+                logger.warning('variable type error. Check ')
 
             if time == -1:
                 time = max(self.system.dae.t, 0) + self.system.tds.config.tstep
@@ -540,7 +547,7 @@ class Streaming(object):
             if name.lower() == 'bus':
                 param = {'tf': time, 'tc': tf, 'bus': idx}
                 self.system.Fault.insert(**param)
-                logger.debug(
+                logger.info(
                     'Event <Fault> added for bus {} at t = {} and tf = {}'.
                     format(idx, time, tf))
             elif name.lower() == 'line':
@@ -555,7 +562,7 @@ class Streaming(object):
                     'u2': 1 if duration else 0,
                 }
                 self.system.Breaker.insert(**param)
-                logger.debug(
+                logger.info(
                     'Event <Breaker> added for line {} at t = {} and tf = {}'.
                     format(idx, time, tf))
 
