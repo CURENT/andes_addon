@@ -9,7 +9,7 @@ from time import sleep
 from numpy import ndarray, array, concatenate, delete
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('andes.addon')
 
 
 class Streaming(object):
@@ -446,13 +446,15 @@ class Streaming(object):
             sleep(0.5)
             try:
                 self.dimec.broadcast('SysParam', self.SysParam)
+                sleep(0.2)
                 self.dimec.broadcast('SysName', self.SysName)
+                sleep(0.2)
             except:  # NOQA
                 logger.warning(
                     'SysParam or SysName broadcast error.'
                     ' Check bus coordinates.'
                 )
-            sleep(0.5)
+            sleep(0.3)
         else:
             if type(recepient) != list:
                 recepient = [recepient]
@@ -504,6 +506,8 @@ class Streaming(object):
 
     def handle_event(self, Event):
         """Handle Fault, Breaker, Syn and Load Events"""
+        logger.debug('Handing event {}'.format(Event))
+
         fields = ('name', 'id', 'action', 'time', 'duration')
         for key in fields:
             if key not in Event:
@@ -531,7 +535,7 @@ class Streaming(object):
                 continue
 
             if time == -1:
-                time = max(self.system.dae.t, 0) + self.system.tds.config.tstep
+                time = max(self.system.dae.t, 0) + self.system.tds.config.tstep + 0.01
 
             tf = time + duration
             if duration == 0.:
@@ -555,6 +559,7 @@ class Streaming(object):
                     'u2': 1 if duration else 0,
                 }
                 self.system.Breaker.insert(**param)
+                logger.debug('Current time: {}'.format(self.system.dae.t))
                 logger.debug(
                     'Event <Breaker> added for line {} at t = {} and tf = {}'.
                     format(idx, time, tf))
