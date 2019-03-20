@@ -1,3 +1,4 @@
+import time
 import logging
 from andes_addon import dime
 
@@ -19,20 +20,22 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 # define the TCP streaming channel
-channel_andes = 'tcp://127.0.0.1:5566'
-channel_pmu = 'ipc:///tmp/dime-pmu'
+channel_andes = 'tcp://192.168.1.200:5000'
+channel_pmu = 'ipc:///tmp/dime'
 
 
 dimec1 = dime.Dime('PMU_broker', channel_andes)
 dimec2 = dime.Dime('PMU_broker', channel_pmu)
 
 try:
+    logger.info('Connecting to {}'.format(channel_andes))
     dimec1.start()
 except Exception:
     logger.error('Connection to ANDES DiME error')
 logger.info('DiME 1 connected')
 
 try:
+    logger.info('Connecting to {}'.format(channel_pmu))
     dimec2.start()
 except Exception:
     logger.error('Connetion to PMU DiME error')
@@ -42,8 +45,14 @@ ws1 = dimec1.workspace
 ws2 = dimec2.workspace
 
 while True:
-    var = dimec1.sync()
+    var1 = dimec1.sync()
+    var2 = dimec2.sync()
 
-    if var:
-        dimec2.broadcast(var, ws1[var])
-        logger.debug('Forwarded variable <{}>'.format(var))
+    if var1:
+        dimec2.broadcast(var1, ws1[var1])
+        logger.debug('1->2 variable <{}>'.format(var1))
+        time.sleep(0.001)
+    if var2:
+        dimec1.broadcast(var2, ws2[var2])
+        logger.debug('2->1 variable <{}>'.format(var2))
+        time.sleep(0.001)
