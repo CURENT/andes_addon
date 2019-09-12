@@ -483,7 +483,11 @@ class Streaming(object):
             else:
                 var_idx = array(var_idx, dtype=int)
 
-        ivar['vgsvaridx'] = (var_idx - 1).tolist()
+        if len(var_idx) == 1 and var_idx[0] == 0:
+            # allow modules to request for all variables
+            ivar['varvgsidx'] = list(range(len(self.Varheader)))
+        else:
+            ivar['vgsvaridx'] = (var_idx - 1).tolist()
         ivar['lastk'] = 0
 
         self.ModuleInfo[name].update(ivar)
