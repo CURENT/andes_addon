@@ -9,7 +9,7 @@ from time import sleep
 from numpy import ndarray, array, concatenate, delete
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('andes.addon')
 
 
 class Streaming(object):
@@ -394,7 +394,12 @@ class Streaming(object):
                 assert len(p) == len(ret[0])
                 ret.append(p)
             else:
-                ret.append(list(self.system.__dict__[model].__dict__[p]))
+                # fix for parameters that are lists
+                value = list(self.system.__dict__[model].__dict__[p])
+                if isinstance(value[0], list):
+                    logger.debug('List parameter value received. Using the 0-th value')
+                    value = [x[0] for x in value]
+                ret.append(list(value))
 
         return ret
 
@@ -446,13 +451,15 @@ class Streaming(object):
             sleep(0.5)
             try:
                 self.dimec.broadcast('SysParam', self.SysParam)
+                sleep(0.2)
                 self.dimec.broadcast('SysName', self.SysName)
+                sleep(0.2)
             except:  # NOQA
                 logger.warning(
                     'SysParam or SysName broadcast error.'
                     ' Check bus coordinates.'
                 )
-            sleep(0.5)
+            sleep(0.3)
         else:
             if type(recepient) != list:
                 recepient = [recepient]
@@ -474,7 +481,11 @@ class Streaming(object):
             self.ModuleInfo[name] = {}
 
         if isinstance(var_idx, int):
-            var_idx = array(var_idx, dtype=int)
+            if var_idx == 0:
+                # if var_idx == 0, send all variables
+                var_idx = array(range(len(self.Varheader))) + 1
+            else:
+                var_idx = array(var_idx, dtype=int)
         elif isinstance(var_idx, ndarray):
             var_idx = var_idx.tolist()
             # unwrap if nested
@@ -483,11 +494,7 @@ class Streaming(object):
             else:
                 var_idx = array(var_idx, dtype=int)
 
-        if len(var_idx) == 1 and var_idx[0] == 0:
-            # allow modules to request for all variables
-            ivar['varvgsidx'] = list(range(len(self.Varheader)))
-        else:
-            ivar['vgsvaridx'] = (var_idx - 1).tolist()
+        ivar['vgsvaridx'] = (var_idx - 1).tolist()
         ivar['lastk'] = 0
 
         self.ModuleInfo[name].update(ivar)
@@ -508,6 +515,8 @@ class Streaming(object):
 
     def handle_event(self, Event):
         """Handle Fault, Breaker, Syn and Load Events"""
+        logger.debug('Handing event {}'.format(Event))
+
         fields = ('name', 'id', 'action', 'time', 'duration')
         for key in fields:
             if key not in Event:
@@ -530,12 +539,14 @@ class Streaming(object):
                 time = times[i]
                 duration = durations[i]
             except IndexError:
-                logger.Warning(
+                logger.warning(
                     'Event key values might have different lengths.')
                 continue
+            except TypeError:
+                logger.warning('variable type error. Check ')
 
             if time == -1:
-                time = max(self.system.dae.t, 0) + self.system.tds.config.tstep
+                time = max(self.system.dae.t, 0) + self.system.tds.config.tstep + 0.01
 
             tf = time + duration
             if duration == 0.:
@@ -544,7 +555,7 @@ class Streaming(object):
             if name.lower() == 'bus':
                 param = {'tf': time, 'tc': tf, 'bus': idx}
                 self.system.Fault.insert(**param)
-                logger.debug(
+                logger.info(
                     'Event <Fault> added for bus {} at t = {} and tf = {}'.
                     format(idx, time, tf))
             elif name.lower() == 'line':
@@ -559,7 +570,7 @@ class Streaming(object):
                     'u2': 1 if duration else 0,
                 }
                 self.system.Breaker.insert(**param)
-                logger.debug(
+                logger.info(
                     'Event <Breaker> added for line {} at t = {} and tf = {}'.
                     format(idx, time, tf))
 
